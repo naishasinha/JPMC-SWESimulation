@@ -1,0 +1,117 @@
+From a6efe6e6e7ef3820bdc21652f32b967e483bf077 Mon Sep 17 00:00:00 2001
+From: Naisha <naishs2@cs.washington.edu>
+Date: Sat, 27 Apr 2024 23:09:00 -0700
+Subject: [PATCH] - fixed the client-side web application so that it displays a
+ graph that automatically updates as it gets data from the server application
+
+---
+ src/App.tsx   | 31 ++++++++++++++++++++++++-------
+ src/Graph.tsx | 11 ++++++++---
+ 2 files changed, 32 insertions(+), 10 deletions(-)
+
+diff --git a/src/App.tsx b/src/App.tsx
+index 0728518..d72aeb4 100755
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -5,9 +5,11 @@ import './App.css';
+ 
+ /**
+  * State declaration for <App />
++ * should always have data and showGraph as properties in order to be valid
+  */
+ interface IState {
+   data: ServerRespond[],
++  showGraph: boolean,
+ }
+ 
+ /**
+@@ -21,26 +23,41 @@ class App extends Component<{}, IState> {
+     this.state = {
+       // data saves the server responds.
+       // We use this state to parse data down to the child element (Graph) as element property
++      // Graph initialized as hidden because we only want the graph to show when the user clicks 'Start Streaming Data'
+       data: [],
++      showGraph: false,
+     };
+   }
+ 
+   /**
+    * Render Graph react component with state.data parse as property data
++   * Only renders when showGraph is true (i.e. when user clicks the 'Start Streaming' button)
+    */
+   renderGraph() {
+-    return (<Graph data={this.state.data}/>)
++    if (this.state.showGraph) {
++      return (<Graph data={this.state.data}/>)
++    }
+   }
+ 
+   /**
+-   * Get new data from server and update the state with the new data
++   * Get new data from server continuously and update the state with the new data
+    */
+   getDataFromServer() {
+-    DataStreamer.getData((serverResponds: ServerRespond[]) => {
+-      // Update the state by creating a new array of data that consists of
+-      // Previous data in the state and the new data from server
+-      this.setState({ data: [...this.state.data, ...serverResponds] });
+-    });
++    let i = 0;
++    const interval = setInterval(() => {
++        DataStreamer.getData((serverResponds: ServerRespond[]) => {
++          // Update the state by creating a new array of data that consists of
++          // Previous data in the state and the new data from server
++          this.setState({
++            data: serverResponds,
++            showGraph: true,
++          });
++        });
++        i++;
++        if (i > 1000) {
++            clearInterval(interval);
++        }
++    }, 100);
+   }
+ 
+   /**
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 3b2a7da..b6acfcd 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -14,7 +14,7 @@ interface IProps {
+  * Perspective library adds load to HTMLElement prototype.
+  * This interface acts as a wrapper for Typescript compiler.
+  */
+-interface PerspectiveViewerElement {
++interface PerspectiveViewerElement extends HTMLElement {
+   load: (table: Table) => void,
+ }
+ 
+@@ -32,7 +32,7 @@ class Graph extends Component<IProps, {}> {
+ 
+   componentDidMount() {
+     // Get element to attach the table from the DOM.
+-    const elem: PerspectiveViewerElement = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
++    const elem: document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
+ 
+     const schema = {
+       stock: 'string',
+@@ -46,9 +46,14 @@ class Graph extends Component<IProps, {}> {
+     }
+     if (this.table) {
+       // Load the `table` in the `<perspective-viewer>` DOM reference.
+-
+       // Add more Perspective configurations here.
+       elem.load(this.table);
++      elem.setAttribute('view', 'y-line');
++      elem.setAttribute('column-pivots', '["stock"]');
++      elem.setAttribute('row-pivots', '["timestamp"]');
++      elem.setAttribute('columns', '["top_ask_price"]');
++      elem.setAttribute('aggregates',
++      '{"stock": "distinct count", "top_ask_price": "avg", "top_bid_price": "avg", "timestamp": "distinct count"}');
+     }
+   }
+ 
+-- 
+2.38.1
+
